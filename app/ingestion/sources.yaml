@@ -1,0 +1,15 @@
+sources:
+  - name: CoinDesk
+    url: https://www.coindesk.com/latest-crypto-news
+    country: US
+    credibility_score: 0.9
+    article_url_patterns:
+      - "/news/"
+      - "/markets/"
+
+  - name: CoinTelegraph
+    url: https://cointelegraph.com/category/latest-news
+    country: US
+    credibility_score: 0.85
+    article_url_patterns:
+      - "/news/"
