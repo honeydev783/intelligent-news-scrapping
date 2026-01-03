@@ -12,3 +12,11 @@ router = APIRouter()
 def article(id: int, db: Session = Depends(get_db)):
     result = db.execute(text("SELECT * FROM articles WHERE id = :id"), {"id" : id})
     return result.mappings().first()
+
+
+@router.get("/article/latest")
+def latest(db: Session = Depends(get_db)):
+    result = db.execute(
+        text("SELECT * FROM articles ORDER BY id DESC LIMIT 10")
+    )
+    return result.mappings().all()
