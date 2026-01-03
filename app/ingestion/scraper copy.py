@@ -36,6 +36,28 @@ def fetch_html(url: str, timeout: int = 15) -> str:
         return response.text
 
 
+# -------------------------
+# Discover article URLs
+# -------------------------
+# def discover_article_urls(html: str, base_url: str, patterns: list[str]) -> list[str]:
+#     soup = BeautifulSoup(html, "lxml")
+#     domain = urlparse(base_url).netloc
+#     urls: set[str] = set()
+
+#     for a in soup.find_all("a", href=True):
+#         href = a["href"].split("#")[0]
+#         url = urljoin(base_url, href)
+#         parsed = urlparse(url)
+
+#         if parsed.netloc != domain:
+#             continue
+
+#         if any(p in parsed.path for p in patterns):
+#             urls.add(url)
+
+#     logger.info("Discovered %d article URLs from %s", len(urls), base_url)
+#     return list(urls)
+
 def discover_article_urls(html: str, base_url: str, patterns: list[str]) -> list[str]:
     soup = BeautifulSoup(html, "lxml")
     domain = urlparse(base_url).netloc
@@ -136,11 +158,8 @@ async def scrape_all_sources() -> list[dict]:
 
     for source in sources:
         logger.info("Scraping source: %s", source["name"])
-        strategy = source.get("fetch_strategy", "httpx")
-        if strategy == "trafilatura":
-            html = trafilatura.fetch_url(source["url"])
-        else:
-            html = fetch_html(source["url"])
+
+        html = fetch_html(source["url"])
 
         article_urls = discover_article_urls(
             html,

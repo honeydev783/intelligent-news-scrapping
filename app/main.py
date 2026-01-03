@@ -29,6 +29,10 @@ def create_app() -> FastAPI:
 
 app = create_app()
 
+@app.get("/")
+def health():
+    return {"status": "ok"}
+
 # if __name__ == "__main__":
 #     uvicorn.run(
 #         "main:app",
