@@ -30,13 +30,13 @@ sources:
     credibility_score: 0.65
     article_url_patterns:
     - "^/[a-z0-9-]+/?$"
-  - name: cryptonews
-    url: https://cryptonews.com/news/
-    country: UK
-    fetch_strategy: httpx
-    credibility_score: 0.65
-    article_url_patterns:
-      - "^/news/[a-z0-9-]+/?$"
+  # - name: cryptonews
+  #   url: https://cryptonews.com/news/
+  #   country: UK
+  #   fetch_strategy: httpx
+  #   credibility_score: 0.65
+  #   article_url_patterns:
+  #     - "^/news/[a-z0-9-]+/?$"
 
   - name: blockworks
     url: https://blockworks.co/news
