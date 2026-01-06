@@ -1,7 +1,8 @@
 import numpy as np
 from ml.embeddings import embed
 from ml.llm import call_llm
-from db.models import Claim
+from db.models import Claim, UnionFind, ClaimSupport, Article
+from collections import defaultdict
 
 def cosine_similarity(a, b):
     a = np.array(a, dtype="float32")
@@ -93,3 +94,92 @@ def compare_claims(
         
     return list(results)
 
+
+def semantic_group_claims(claims, threshold=0.75):
+    embeddings = {}
+    uf = UnionFind()
+
+    for c in claims:
+        vec = embed(c.claim_text)
+        if isinstance(vec[0], list):
+            vec = vec[0]
+        embeddings[c.id] = np.array(vec, dtype="float32")
+
+    ids = list(embeddings.keys())
+
+    for i in range(len(ids)):
+        for j in range(i + 1, len(ids)):
+            sim = cosine_similarity(
+                embeddings[ids[i]],
+                embeddings[ids[j]],
+            )
+            if sim >= threshold:
+                uf.union(ids[i], ids[j])
+
+    groups = defaultdict(list)
+    for c in claims:
+        root = uf.find(c.id)
+        groups[root].append(c)
+
+    return groups
+
+
+# ---------------------------------------------------------
+# Step 2: Support vs Contradiction inside group
+# ---------------------------------------------------------
+def classify_group(group):
+    anchor = group[0]
+    supporting = []
+    contradicting = []
+
+    for c in group:
+        if c.id == anchor.id:
+            supporting.append(c)
+            continue
+
+        stance = llm_contradiction_check(anchor.claim_text, c.claim_text)
+
+        if stance == "contradicting":
+            contradicting.append(c)
+        else:
+            supporting.append(c)
+
+    return supporting, contradicting
+
+
+# ---------------------------------------------------------
+# Step 3: Persist truth supports
+# ---------------------------------------------------------
+def save_supports(db, cluster_id, claims, support_type):
+    db.bulk_save_objects([
+        ClaimSupport(
+            cluster_id=cluster_id,
+            claim_id=c.id,
+            support_type=support_type
+        )
+        for c in claims
+    ])
+
+
+# ---------------------------------------------------------
+# Step 4: Update article credibility
+# ---------------------------------------------------------
+def update_article_credibility(db, truth_claim_ids):
+    article_claims = (
+        db.query(Claim.article_id, Claim.id)
+        .all()
+    )
+
+    article_totals = defaultdict(int)
+    article_truths = defaultdict(int)
+
+    for article_id, claim_id in article_claims:
+        article_totals[article_id] += 1
+        if claim_id in truth_claim_ids:
+            article_truths[article_id] += 1
+
+    for article_id in article_totals:
+        score = article_truths[article_id] / article_totals[article_id]
+        db.query(Article).filter(
+            Article.id == article_id
+        ).update({"credibility_score": score})

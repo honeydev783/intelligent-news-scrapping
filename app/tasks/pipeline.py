@@ -2,7 +2,7 @@ import asyncio
 from ingestion.scraper import scrape_all_sources
 from ml.embeddings import embed
 from ml.claim_extraction import extract_claims
-from ml.claim_comparison import compare_claims
+from ml.claim_comparison import compare_claims, semantic_group_claims, classify_group, save_supports, update_article_credibility
 from ml.truth_engine import evaluate_truth
 from core.logging import log
 from ml.services.cluster_registry import get_cluster_index
@@ -12,7 +12,7 @@ from db.session import SessionLocal
 from ingestion.persist import save_articles
 from tenacity import retry, stop_after_attempt, wait_exponential
 from db.helpers import get_all_cluster_ids
-
+from ingestion.sources import SOURCE_CREDIBILITY_MAP
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(min=1, max=10),
@@ -52,8 +52,8 @@ def evaluate_cluster(cluster_id: int):
         cluster = db.get(TruthCluster, cluster_id)
 
         claims = (
-            db.query(Claim)
-            .join(Article)
+            db.query(Claim, Article)
+            .join(Article, Claim.article_id == Article.id)
             .filter(Article.topic_cluster_id == cluster_id)
             .all()
         )
@@ -66,24 +66,65 @@ def evaluate_cluster(cluster_id: int):
             ClaimSupport.cluster_id == cluster_id
         ).delete(synchronize_session=False)
         db.commit()
-        #  Uses YOUR logic
-        comparisons = compare_claims(claims)
+        
+        claim_objs = [c for c, _ in claims]
+        article_map = {c.id: a for c, a in claims}
+        
+        groups = semantic_group_claims(claim_objs)
 
-        for claim_id, support_type in comparisons:
-            db.add(ClaimSupport(
-                cluster_id=cluster_id,
-                claim_id=claim_id,
-                support_type=support_type,
-            ))
+        truth_claim_ids = set()
 
-        articles = (
-            db.query(Article)
-            .filter(Article.topic_cluster_id == cluster_id)
-            .all()
-        )
+        for group in groups.values():
+            if len(group) < 2:
+                continue
 
-        evaluate_truth(cluster, claims, articles, db)
+            supporting, contradicting = classify_group(group)
+
+            support_score = sum(
+                SOURCE_CREDIBILITY_MAP.get(
+                article_map[c.id].source,
+                0
+                )
+                for c in supporting
+            )
+
+            contradict_score = sum(
+                SOURCE_CREDIBILITY_MAP.get(
+                article_map[c.id].source,
+                0
+                )
+                for c in contradicting
+            )
+            print("support_score", support_score)
+            print("contradicting_score", contradict_score)
+            if support_score >= contradict_score:
+                truth_claim_ids.update(c.id for c in supporting)
+                save_supports(db, cluster_id, supporting, "supporting")
+            else:
+                truth_claim_ids.update(c.id for c in contradicting)
+                save_supports(db, cluster_id, contradicting, "contradicting")
+
+        update_article_credibility(db, truth_claim_ids)
+        
         db.commit()
+        #  Uses YOUR logic
+        #comparisons = compare_claims(claims)
+
+        # for claim_id, support_type in comparisons:
+        #     db.add(ClaimSupport(
+        #         cluster_id=cluster_id,
+        #         claim_id=claim_id,
+        #         support_type=support_type,
+        #     ))
+
+        # articles = (
+        #     db.query(Article)
+        #     .filter(Article.topic_cluster_id == cluster_id)
+        #     .all()
+        # )
+
+        # evaluate_truth(cluster, claims, articles, db)
+        # db.commit()
     except Exception as e:
         db.rollback()
         print("CLUSTER EVALUATION ERROR:", repr(e))

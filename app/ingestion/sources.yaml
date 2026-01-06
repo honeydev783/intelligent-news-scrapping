@@ -2,7 +2,7 @@ sources:
   - name: CoinDesk
     url: https://www.coindesk.com/latest-crypto-news
     country: US
-    credibility_score: 0.9
+    credibility_score: 0.5
     article_url_patterns:
       - "/news/"
       - "/markets/"

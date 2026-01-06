@@ -37,3 +37,17 @@ class ClaimSupport(Base):
     cluster_id = Column(Integer)
     claim_id = Column(Integer)
     support_type = Column(Enum("supporting","contradicting", name="support_type_enum"))
+    
+class UnionFind:
+    def __init__(self):
+        self.parent = {}
+
+    def find(self, x):
+        if self.parent.setdefault(x, x) != x:
+            self.parent[x] = self.find(self.parent[x])
+        return self.parent[x]
+
+    def union(self, a, b):
+        ra, rb = self.find(a), self.find(b)
+        if ra != rb:
+            self.parent[rb] = ra

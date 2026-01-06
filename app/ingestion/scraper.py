@@ -154,7 +154,7 @@ async def scrape_all_sources() -> list[dict]:
                 continue
             article["name"] = source["name"]
             article["country"] = source["country"]
-            article["credibility_score"] = source["credibility_score"]  
+            article["credibility_score"] = 0  
             all_articles.append(article)
 
     return all_articles
